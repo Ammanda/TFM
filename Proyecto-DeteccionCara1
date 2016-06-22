@@ -1,0 +1,69 @@
+#include <stdio.h>
+#include <tchar.h>
+#include <opencv2\opencv.hpp>
+#include <SDKDDKVer.h>
+
+using namespace cv;
+using namespace std;
+
+int main()
+{
+	//Declaración de una variable tipo VideoCapture para acceder a la cámara
+	VideoCapture Vcap;
+	//Check acceso a la cámara del ordenador o externa
+	if (!Vcap.open(1)) //0 es la cámara integrada del ordenador. 1 webcam externa
+	{
+		cout << "No se puede acceder a la Cámara." << endl;
+		system("PAUSE"); //Espera entrada de usuario por teclado
+		return -1;
+	}
+
+	//Variable para los el clasificador de la cara
+	CascadeClassifier detector_cara;
+	//haarcascade_frontalface_alt2.xml")) --> no noto diferencia con haarcascade_frontalface_alt
+	//haarcascade_frontalcatface_extended.xml")) --> muy sensible. Detecta elementos que no son caras.
+	//haarcascade_profileface.xml")) --> solo detecta el perfil izquierdo.
+	//haarcascade_frontalface_default.xml")) --> mas sensible que frontalface_alt. Demasiado
+	//*****Ninguno detecta cara inclinada lateralmente!!! Mirar código interno
+	if (!detector_cara.load("C:\\opencv\\sources\\data\\haarcascades\\haarcascade_frontalface_alt.xml"))
+	{
+		cout << "No se puede abrir el clasificador de cara." << endl;
+		system("PAUSE"); //Espera entrada de usuario por teclado
+		return -1;
+	}
+
+	//Bucle para la obtención de frame por frame y procesarlo independientemente
+	while (true)
+	{
+		Mat im_destino, im_gris, imagen;	//Declaramos variables para guardar y trabajar la imagen
+		Vcap.read(imagen);					//Almacenamos el frame de vídeo en el objeto imagen
+		
+		//Convertimos a escala de grises la imagen
+		cvtColor(imagen, im_gris, CV_BGR2GRAY); //Guardamos en gris la imagen convertida a tonos grises
+		equalizeHist(im_gris, im_destino);	 //Ecualizamos la imagen para estandarizar el contraste
+
+		//cv::threshold(im_gris, im_gris, 0.7*sum(im_gris)[0] / (im_gris.cols*im_gris.rows), 255, cv::THRESH_BINARY);
+
+		//Vector para guardar las características de los rostros encontrados
+		vector<Rect> vect_cara;
+		//detector.detectMultiScale(im_gris, rect);  --> resultados parecidos a los obtenidos tras equalizar
+		detector_cara.detectMultiScale(im_destino, vect_cara, 1.2, 3, 0, Size(60, 60));
+	
+		for (Rect rect : vect_cara)	//pintar rectangulo sobre la cara
+		{
+			rectangle(imagen,
+				Point(rect.x, rect.y),
+				Point(rect.x + rect.width, rect.y + rect.height),
+				CV_RGB(0, 255, 0), 2);
+		}
+
+		//Frames del vídeo original con un rectángulo sobre los rostros detectados
+		imshow("Deteccion de rostros", imagen);
+
+		//imshow("Imagen en escala de grises", im_gris);
+		//imshow("Imagen al aplicar ecualizacion de histograma", im_destino);
+
+		//AL presionar la tecla "x" ó "X" cerramos la cámara y salimos del programa
+		if (waitKey(50) == 88 || waitKey(50) == 120) break;
+	}
+}
