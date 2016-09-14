@@ -1,0 +1,129 @@
+/*
+A ejecutar en OpenCV
+ANTERIOR:
+Bucle para el ángulo de giro
+Gira la imagen original y dibuja el rectangulo sobre la imagen girada y la incorpora despues +/-45º
+Perfil no aporta ventajas. Quizás el sentido de giro del perfil puede intentar sacarse de ahí.
+El rostro se muestra en imágen sin recuadro pero centrada y con color del vídeo original.
+FIN:
+Detectar profundidad relativa con la anchura del rectángulo de la cara y guardar en una clase los datos con tiempo.
+*/
+
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
+#include <stdio.h>
+#include <tchar.h>
+#include <time.h>
+#include <opencv2\opencv.hpp>
+#include <SDKDDKVer.h>
+
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <iostream>
+
+using namespace cv;
+using namespace std;
+
+Mat rotate(Mat src, double angle)
+{
+    Mat dst;
+    Point2f pt(src.cols / 2., src.rows / 2.);
+    Mat r = getRotationMatrix2D(pt, angle, 1.0);
+    warpAffine(src, dst, r, Size(src.cols, src.rows));
+    return dst;
+}
+
+int main()
+{
+    //Declaración de una variable tipo VideoCapture para acceder a la cámara
+    VideoCapture Vcap;
+    //Comprobar el acceso a la cámara del ordenador o externa
+    if (!Vcap.open(0)) //0 es la cámara integrada del ordenador. 1 webcam externa
+    {
+        cout << "No se puede acceder a la Cámara." << endl;
+        system("PAUSE"); //Espera entrada de usuario por teclado
+        return -1;
+    }
+
+    //Variable para los el clasificador de la cara
+    CascadeClassifier detector_cara, detector_cara_perf;
+    if (!detector_cara.load("C:\\opencv\\sources\\data\\haarcascades\\haarcascade_frontalface_alt.xml"))
+    {
+        cout << "No se puede abrir el clasificador de cara." << endl;
+        system("PAUSE"); //Espera entrada de usuario por teclado
+        return -1;
+    }
+    if (!detector_cara_perf.load("C:\\opencv\\sources\\data\\haarcascades\\haarcascade_profileface.xml"))
+    {
+        cout << "No se puede abrir el clasificador de cara de perfil." << endl;
+        system("PAUSE"); //Espera entrada de usuario por teclado
+        return -1;
+    }
+
+    FILE *doc;
+    fopen_s(&doc, "prueba1.txt", "w");     fprintf(doc, "P.x P.y ; Angulo Profundidad\t Time (hh:mm:ss)\n");
+
+    int hora, minutos, segundos;
+    time_t timer;
+    struct tm *tiempo = { 0 };
+
+    //Bucle para la obtención de frame por frame y procesarlo independientemente
+    while (true)
+    {
+        int alfa1 = -70;
+        Mat aux;
+        Mat im_destino, im_gris, imagen;    //Declaramos variables para guardar y trabajar la imagen
+        Vcap.read(imagen);                    //Almacenamos el frame de vídeo en el objeto imagen
+        Mat im_rotate = imagen;
+
+        //Convertimos a escala de grises la imagen
+        cvtColor(imagen, im_gris, CV_BGR2GRAY); //Guardamos en gris la imagen convertida a tonos grises
+        equalizeHist(im_gris, im_destino);        //Ecualizamos la imagen para estandarizar el contraste
+        //cv::threshold(im_gris, im_gris, 0.7*sum(im_gris)[0] / (im_gris.cols*im_gris.rows), 255, cv::THRESH_BINARY);
+                                             
+        vector<Rect> vect_cara;                //Vector para guardar las características de los rostros encontrados
+        detector_cara.detectMultiScale(im_destino, vect_cara, 1.2, 3, 0, Size(60, 60));
+
+        while (vect_cara.empty() && alfa1<55) {
+            alfa1 = alfa1 + 15;
+            im_rotate = rotate(im_destino, alfa1);
+            detector_cara.detectMultiScale(im_rotate, vect_cara, 1.2, 3, 0, Size(60, 60));
+            /*            if (vect_cara.empty())
+            {
+            detector_cara_perf.detectMultiScale(im_rotate, vect_cara, 1.2, 3, 0, Size(60, 60));
+            //    cout << "Cara perfil " << endl;
+            }
+            */
+        }
+        //cout << "Angulo girado " << alfa1 << endl;
+        for (Rect rect : vect_cara)    //pintar rectangulo sobre la cara
+        {
+            if (alfa1 != -70) imagen = rotate(imagen, alfa1);
+            //    system("PAUSE"); //Espera entrada de usuario por teclado        
+            //rectangle(imagen, Point(rect.x, rect.y), Point(rect.x + rect.width, rect.y + rect.height), CV_RGB(0, 255, 0), 2);
+            //    aux=imagen.adjustROI(rect.x, rect.y, rect.width, rect.height);
+            aux = imagen(rect);
+            //cout << "Angulo: " << alfa1 << "Pos x:" << (rect.x + rect.width / 2) << endl; 
+
+            time(&timer);  /* get current time; same as: timer = time(NULL)  */
+            tiempo = localtime(&timer);
+            hora = tiempo->tm_hour;     minutos = tiempo->tm_min;     segundos = tiempo->tm_sec;
+
+            fprintf(doc, "%d %d ; %d %d \t %d:%d:%d\n", rect.x, rect.y, alfa1, rect.width,hora,minutos,segundos);
+        }
+
+        //Vídeo original con el rectángulo sobre el rostro detectado
+        if (vect_cara.empty()) {}
+        else
+        {
+            imshow("Deteccion de rostros", aux);
+        }
+
+        //AL presionar la tecla "x" ó "X" cerramos la cámara y salimos del programa
+        if (waitKey(50) == 88 || waitKey(50) == 120) break;
+    }
+}
+
+Amanda
